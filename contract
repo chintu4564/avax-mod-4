@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "hardhat/console.sol";
+
+contract FootballToken is ERC20, Ownable {
+    event WaresRedeemed(address indexed account, string wares, uint256 num);
+    event Gift(address indexed from, address indexed acceptor, uint256 amount, string message);
+
+    mapping(string => uint256) public waresCosts;
+    mapping(address => string) public acceptorSelectedWares;
+
+    string[] public availableWares;
+
+    constructor(address initialOwner) ERC20("DynamicFootballToken", "DFT") Ownable(initialOwner) {
+        initializeWaresCosts();
+    }
+
+    function mint(address to, uint256 num) external onlyOwner {
+        _mint(to, num);
+    }
+
+    function burn(uint256 num) external {
+        require(num > 0, "The num to destroy must be greater than zero");
+        require(balanceOf(msg.sender) >= num, "Insufficient funds for token destruction");
+        _burn(msg.sender, num);
+    }
+
+    function redeemWares(string memory waresName, uint256 num) external payable {
+        require(waresCosts[waresName] > 0, "Invalid wares selected");
+        require(waresCosts[waresName] == num, "Incorrect token amount for wares redemption");
+        require(balanceOf(msg.sender) >= num, "Insufficient funds for wares redemption");
+
+        _burn(msg.sender, num);
+        acceptorSelectedWares[msg.sender] = waresName;
+        emit WaresRedeemed(msg.sender, waresName, num);
+    }
+
+    function transferTokens(address acceptor, uint256 num) external {
+        require(acceptor != address(0), "Invalid acceptor address provided");
+        require(balanceOf(msg.sender) >= num, "Insufficient funds for token transfer");
+        _transfer(msg.sender, acceptor, num);
+        emit Gift(msg.sender, acceptor, num, ""); // Remove personal message from the Gift event
+    }
+
+    function addWares(string calldata waresName, uint256 cost) external onlyOwner {
+        require(cost > 0, "Wares cost must be greater than zero");
+        require(waresCosts[waresName] == 0, "Wares already exists");
+
+        availableWares.push(waresName);
+        waresCosts[waresName] = cost;
+    }
+
+    function removeWares(string calldata waresName) external onlyOwner {
+        require(waresCosts[waresName] > 0, "Wares does not exist");
+
+        for (uint256 i = 0; i < availableWares.length; i++) {
+            if (keccak256(bytes(availableWares[i])) == keccak256(bytes(waresName))) {
+                availableWares[i] = availableWares[availableWares.length - 1];
+                availableWares.pop();
+                break;
+            }
+        }
+
+        delete waresCosts[waresName];
+    }
+
+    // Function to initialize wares costs
+    function initializeWaresCosts() internal {
+        waresCosts["Footbal"] = 75;
+        waresCosts["Football jersey"] = 50;
+        waresCosts["Football shoes"] = 100;
+        waresCosts["Football Gloves"] = 120;
+    }
+}
